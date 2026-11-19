@@ -73,7 +73,7 @@ signals for a non-terminal."
 (defconstant +read-slice+ 0.05d0
   "Longest single wait in BACKEND-READ, in seconds (the brief allows 0.1).")
 
-#+(and sbcl (not windows))
+#+(and sbcl (not (or windows win32)))
 (defun %sigwinch-handler (signal info context)
   (declare (ignore signal info context))
   (setf *resize-generation* (logand (1+ *resize-generation*) most-positive-fixnum)))
@@ -81,7 +81,7 @@ signals for a non-terminal."
 (defun %install-watcher ()
   (bt2:with-lock-held (*watch-lock*)
     (when (= 1 (incf *watchers*))
-      #+(and sbcl (not windows))
+      #+(and sbcl (not (or windows win32)))
       (setf *previous-sigwinch*
             (sb-sys:enable-interrupt sb-unix:sigwinch #'%sigwinch-handler))))
   nil)
@@ -89,7 +89,7 @@ signals for a non-terminal."
 (defun %remove-watcher ()
   (bt2:with-lock-held (*watch-lock*)
     (when (and (plusp *watchers*) (zerop (decf *watchers*)))
-      #+(and sbcl (not windows))
+      #+(and sbcl (not (or windows win32)))
       (sb-sys:enable-interrupt sb-unix:sigwinch (or *previous-sigwinch* :default))
       (setf *previous-sigwinch* nil)))
   nil)
