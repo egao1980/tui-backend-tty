@@ -186,17 +186,21 @@ STATE is a cons whose car holds a high surrogate left from the last read."
     (coerce out '(simple-array (unsigned-byte 8) (*)))))
 
 (defun %os-write (out octets)
-  "WriteFile every octet of OCTETS to OUT."
+  "WriteFile every octet of OCTETS to OUT. Repeated 0-octet writes signal
+TTY-SYSTEM-ERROR (see %WRITE-FULLY)."
   (let ((len (length octets)) (off 0))
     (cffi:with-foreign-pointer (p +write-chunk+)
       (cffi:with-foreign-object (written :uint32)
         (loop while (< off len)
-              do (let ((chunk (min +write-chunk+ (- len off))) (done 0))
+              do (let ((chunk (min +write-chunk+ (- len off))))
                    (dotimes (i chunk) (setf (cffi:mem-aref p :uint8 i) (aref octets (+ off i))))
-                   (loop while (< done chunk)
-                         do (when (zerop (%write-file out (cffi:inc-pointer p done) (- chunk done)
-                                                      written (cffi:null-pointer)))
-                              (%sys-error :write-file (%get-last-error)))
-                            (incf done (cffi:mem-ref written :uint32)))
+                   (%write-fully chunk
+                                 (lambda (done)
+                                   (setf (cffi:mem-ref written :uint32) 0)
+                                   (when (zerop (%write-file out (cffi:inc-pointer p done) (- chunk done)
+                                                             written (cffi:null-pointer)))
+                                     (%sys-error :write-file (%get-last-error)))
+                                   (cffi:mem-ref written :uint32))
+                                 :write-file)
                    (incf off chunk))))))
   nil)

@@ -21,11 +21,12 @@ No C shim, no overlays, no grovel: the package is source-only.
 
 - `backend-start` saves the terminal state and enters raw mode. It signals `tty-not-a-terminal` (a `tui-backend-error`) when stdin or stdout is not a terminal.
 - `backend-stop` restores the saved state exactly. `run-tui` calls it on every exit, including errors. An exit hook restores it when the process exits without unwinding `run-tui`.
+- A failed system call signals `tty-system-error` with the operation and errno (Unix, read through CFFI off SBCL) or `GetLastError` (Windows). A write that keeps returning 0 octets is a `tty-system-error` too, not a busy loop.
 - A window resize wakes `backend-read`. `run-tui` then sees the new `backend-size` and sends a `resize-message`.
 
 ## Tests
 
-The tests start a child Lisp on a pty from [`pty-protocol`](https://github.com/egao1980/pty-protocol) ([`pty-backend-native`](https://github.com/egao1980/pty-backend-native)) and read the terminal state with `stty` (Unix) or `GetConsoleMode` (Windows). The crash-exit test needs `sh` and is skipped on Windows.
+The tests start a child Lisp on a pty from [`pty-protocol`](https://github.com/egao1980/pty-protocol) ([`pty-backend-native`](https://github.com/egao1980/pty-backend-native)) and read the terminal state with `stty` (Unix) or `GetConsoleMode` (Windows). The crash-exit test needs `sh` and is skipped on Windows. The write loop is tested through a stub writer, without a terminal.
 
 ## License
 
