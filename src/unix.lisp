@@ -39,10 +39,24 @@
   #+(and darwin arm64) (%ioctl-ptr fd request 0 0 0 0 0 0 ptr)
   #-(and darwin arm64) (%ioctl-ptr fd request ptr))
 
+;;; errno is a thread-local lvalue behind a libc function: __errno_location
+;;; (glibc, musl), __error (macOS, FreeBSD), __errno (OpenBSD, NetBSD, Bionic).
+(cffi:defcfun (#+(or darwin freebsd dragonfly) "__error"
+               #+(or openbsd netbsd android) "__errno"
+               #-(or darwin freebsd dragonfly openbsd netbsd android) "__errno_location"
+               %errno-location)
+    :pointer)
+
+(defun %cffi-errno ()
+  "errno read through CFFI. Call it directly after the failing call."
+  (cffi:mem-ref (%errno-location) :int))
+
 (defmacro %errno ()
-  "errno of the foreign call just made. Expand it directly after the call."
+  "errno of the foreign call just made. Expand it directly after the call.
+SBCL saves errno right after the alien call; elsewhere it is read through
+CFFI."
   #+sbcl '(sb-alien:get-errno)
-  #-sbcl nil)
+  #-sbcl '(%cffi-errno))
 
 (defun %sys-error (operation code)
   (error 'tty-system-error :operation operation :code code
@@ -138,19 +152,21 @@ EIO is EOF too: a Linux pty whose master has closed reports it."
                        (t (%sys-error :read e)))))))))
 
 (defun %os-write (out octets)
-  "write(2) every octet of OCTETS to OUT, retrying on EINTR."
+  "write(2) every octet of OCTETS to OUT, retrying on EINTR. Repeated 0-octet
+writes signal TTY-SYSTEM-ERROR (see %WRITE-FULLY)."
   (let ((len (length octets)) (off 0))
     (cffi:with-foreign-pointer (p +read-size+)
       (loop while (< off len)
             do (let ((chunk (min +read-size+ (- len off))))
                  (dotimes (i chunk) (setf (cffi:mem-aref p :uint8 i) (aref octets (+ off i))))
-                 (let ((done 0))
-                   (loop while (< done chunk)
-                         do (let ((n (%write out (cffi:inc-pointer p done) (- chunk done))))
-                              (cond ((plusp n) (incf done n))
-                                    ((zerop n))
-                                    (t (let ((e (%errno)))
-                                         (unless (eql e +eintr+)
-                                           (%sys-error :write e))))))))
+                 (%write-fully chunk
+                               (lambda (done)
+                                 (let ((n (%write out (cffi:inc-pointer p done) (- chunk done))))
+                                   (cond ((not (minusp n)) n)
+                                         (t (let ((e (%errno)))
+                                              (if (eql e +eintr+)
+                                                  nil
+                                                  (%sys-error :write e)))))))
+                               :write)
                  (incf off chunk)))))
   nil)

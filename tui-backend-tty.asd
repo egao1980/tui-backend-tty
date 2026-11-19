@@ -1,5 +1,5 @@
 (defsystem "tui-backend-tty"
-  :version "0.1.0"
+  :version "0.1.1"
   :description "tui-protocol backend on the real terminal: termios raw mode and SIGWINCH (Unix), console VT mode (Windows), CFFI into the system libraries"
   :author "egao1980"
   :license "MIT"
@@ -8,6 +8,7 @@
   :pathname "src"
   :components ((:file "package")
                (:file "conditions")
+               (:file "write")
                (:file "unix" :if-feature (:not (:or :windows :win32)))
                (:file "windows" :if-feature (:or :windows :win32))
                (:file "backend"))
@@ -20,7 +21,8 @@
   :components ((:file "package")
                ;; Loaded only by the child Lisp that the tests start on a pty.
                (:static-file "child.lisp")
-               (:file "tty-test"))
+               (:file "tty-test")
+               (:file "write-test"))
   :perform (test-op (o c)
              (unless (symbol-call :rove :run c)
                (error "tests failed for ~A" (component-name c)))))
