@@ -2,7 +2,7 @@
 
 [`tui-protocol`](https://github.com/egao1980/tui-protocol) backend on the real terminal. Brief: [`cl-stack/docs/capabilities/tui.md`](https://github.com/egao1980/cl-stack/blob/main/docs/capabilities/tui.md) ([#274](https://github.com/egao1980/cl-stack/issues/274)).
 
-**Status: contract only.** The tests describe the backend; the GF methods signal "not implemented".
+**Status: implemented** (Unix: termios raw mode + SIGWINCH via CFFI into libc; Windows: console VT mode via kernel32). The pty tests pass on macOS arm64.
 
 ```lisp
 (asdf:load-system "tui-backend-tty")

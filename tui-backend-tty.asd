@@ -8,6 +8,8 @@
   :pathname "src"
   :components ((:file "package")
                (:file "conditions")
+               (:file "unix" :if-feature (:not :windows))
+               (:file "windows" :if-feature :windows)
                (:file "backend"))
   :in-order-to ((test-op (test-op "tui-backend-tty/tests"))))
 
