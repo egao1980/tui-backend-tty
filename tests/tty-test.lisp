@@ -76,6 +76,40 @@
     (ok (wait-report c :stopped))
     (ok (eql 0 (finish-child c)))))
 
+(defun last-view (child)
+  "The size of the newest :VIEW report, as (:COLS C :ROWS R), or NIL."
+  (rest (car (last (remove :view (read-report (child-report child))
+                           :key #'first :test-not #'eq)))))
+
+(defun settle (child seconds)
+  "Drain the child's output for SECONDS."
+  (let ((deadline (+ (get-internal-real-time) (* seconds internal-time-units-per-second))))
+    (loop while (< (get-internal-real-time) deadline) do (drain child))))
+
+(deftest resize-burst-ends-at-the-last-size
+  ;; cl-stack-code#49: resizes in quick succession (a font size change twice
+  ;; within half a second) end with the program laid out for the last size.
+  (with-child (c :run :cols 80 :rows 24)
+    (ok (wait-report c :view :timeout *startup-timeout*
+                             :test (lambda (p) (equal p '(:cols 80 :rows 24)))))
+    (testing "two resizes back to back"
+      (pp:pty-resize (child-pty c) 100 30)
+      (pp:pty-resize (child-pty c) 90 20)
+      (ok (wait-report c :view :test (lambda (p) (equal p '(:cols 90 :rows 20)))))
+      (settle c 0.5)
+      (ok (equal '(:cols 90 :rows 20) (last-view c)) "nothing drawn at an older size after it"))
+    (testing "a burst while frames are being drawn"
+      (loop for i from 0 below 20
+            do (pp:pty-resize (child-pty c) (+ 60 i) (+ 15 i))
+               (drain c 0.005))
+      (pp:pty-resize (child-pty c) 123 41)
+      (ok (wait-report c :view :test (lambda (p) (equal p '(:cols 123 :rows 41)))))
+      (settle c 0.5)
+      (ok (equal '(:cols 123 :rows 41) (last-view c)) "the last size wins"))
+    (type-keys c "q")
+    (ok (wait-report c :stopped))
+    (ok (eql 0 (finish-child c)))))
+
 (deftest condition-in-update-restores-the-terminal
   (with-child (c :run)
     (let ((before (wait-report c :before :timeout *startup-timeout*)))
